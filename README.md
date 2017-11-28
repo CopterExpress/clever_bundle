@@ -24,6 +24,8 @@ cd ~/catkin_ws
 catkin_make -j1
 ```
 
+Перевести submodule clever-frontend на ветку build
+
 Включить сервис roscore (если он не включен):
 
 ```bash
