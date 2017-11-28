@@ -1,14 +1,17 @@
 <launch>
-    <arg name="fcu_conn" default="uart"/>
+    <!--arg name="fcu_conn" default="uart"/-->
+    <arg name="fcu_conn" default="usb"/>
     <arg name="fcu_ip" default="127.0.0.1"/>
     <arg name="gcs_bridge" default="tcp"/>
     <arg name="viz" default="true"/>
     <arg name="web_server" default="true"/>
-    <arg name="web_video_server" default="true"/>
+    <!--arg name="web_video_server" default="true"/-->
+    <arg name="web_video_server" default="false"/>
     <arg name="rosbridge" default="true"/>
     <arg name="camera" default="false"/>
     <arg name="fpv_camera" default="true"/>
-    <arg name="fpv_camera_device" default="/dev/v4l/by-id/usb-HD_Camera_Manufacturer_USB_2.0_Camera-video-index0"/>
+    <!--arg name="fpv_camera_device" default="/dev/v4l/by-id/usb-HD_Camera_Manufacturer_USB_2.0_Camera-video-index0"/-->
+    <arg name="fpv_camera_device" default="/dev/video0"/>
     <arg name="arduino" default="false"/>
 
     <!-- mavros -->

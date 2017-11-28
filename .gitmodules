@@ -1,0 +1,3 @@
+[submodule "clever/clever-frontend"]
+	path = clever/clever-frontend
+	url = https://github.com/CopterExpress/clever-frontend.git
