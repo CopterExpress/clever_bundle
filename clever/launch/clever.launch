@@ -5,8 +5,7 @@
     <arg name="gcs_bridge" default="tcp"/>
     <arg name="viz" default="true"/>
     <arg name="web_server" default="true"/>
-    <!--arg name="web_video_server" default="true"/-->
-    <arg name="web_video_server" default="false"/>
+    <arg name="web_video_server" default="true"/>
     <arg name="rosbridge" default="true"/>
     <arg name="camera" default="false"/>
     <arg name="fpv_camera" default="true"/>
