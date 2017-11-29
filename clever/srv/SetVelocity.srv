@@ -1,9 +1,8 @@
 float32 vx
 float32 vy
 float32 vz
-float32 yaw
 string frame_id
-bool update_frame
+bool frame_locked
 ---
 bool success
 string message

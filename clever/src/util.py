@@ -26,3 +26,9 @@ def vector3_from_point(p):
 
 def point_from_vector3(v):
     return Point(v.x, v.y, v.z)
+
+
+def remove_keys(d, keys):
+    for key in keys:
+        if key in d:
+            del d[key]

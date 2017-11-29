@@ -58,15 +58,12 @@ find_package(catkin REQUIRED COMPONENTS
 add_service_files(
   FILES
   SetPosition.srv
-  SetPositionYawRate.srv
   SetPositionGlobal.srv
-  SetPositionGlobalYawRate.srv
   SetVelocity.srv
-  SetVelocityYawRate.srv
   SetAttitude.srv
-  SetAttitudeYawRate.srv
-  SetRatesYaw.srv
   SetRates.srv
+  SetYaw.srv
+  SetYawRate.srv
   GetTelemetry.srv
 )
 

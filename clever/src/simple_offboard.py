@@ -12,7 +12,7 @@ from threading import Lock
 import math
 
 from global_local import global_to_local
-from util import euler_from_orientation, vector3_from_point, orientation_from_euler
+from util import euler_from_orientation, vector3_from_point, orientation_from_euler, remove_keys
 from std_srvs.srv import Trigger
 from clever import srv
 
@@ -127,159 +127,180 @@ def offboard_and_arm():
                 raise Exception('Arming timed out')
 
 
+pns = PointStamped()
 ps = PoseStamped()
 vs = Vector3Stamped()
+qs = QuaternionStamped()
+at = AttitudeTarget()
+pt = PositionTarget()
 
 
-def get_publisher_and_message(req, stamp):
-    ps.header.stamp = stamp
-    vs.header.stamp = stamp
+# The dict, that stores all the current controls
+controls = {}
+
+
+def apply_controls(req, stamp):
+    """Change controls dict, correspondingly user's request
+    """
+    global controls
 
     if isinstance(req, srv.SetPositionRequest):
-        ps.header.frame_id = req.frame_id or 'local_origin'
-        ps.pose.position = Point(req.x, req.y, req.z)
-        ps.pose.orientation = orientation_from_euler(0, 0, req.yaw)
-        pose_local = tf_buffer.transform(ps, 'local_origin', TRANSFORM_TIMEOUT)
+        remove_keys(controls, ['vx', 'vy', 'vz', 'roll', 'pitch', 'roll_rate', 'pitch_rate', 'thrust'])
 
-        msg = PositionTarget(coordinate_frame=PositionTarget.FRAME_LOCAL_NED,
-                             type_mask=PositionTarget.IGNORE_VX + PositionTarget.IGNORE_VY + PositionTarget.IGNORE_VZ +
-                                       PositionTarget.IGNORE_AFX + PositionTarget.IGNORE_AFY + PositionTarget.IGNORE_AFZ +
-                                       PositionTarget.IGNORE_YAW_RATE,
-                             position=pose_local.pose.position,
-                             yaw=euler_from_orientation(pose_local.pose.orientation)[2] - math.pi / 2)
-        return position_pub, msg
+        pns.header.frame_id = req.frame_id or 'local_origin'
+        pns.header.stamp = stamp
+        pns.point = Point(req.x, req.y, req.z)
+        local = tf_buffer.transform(pns, 'local_origin', TRANSFORM_TIMEOUT)
 
-    elif isinstance(req, srv.SetPositionYawRateRequest):
-        ps.header.frame_id = req.frame_id or 'local_origin'
-        ps.pose.position = Point(req.x, req.y, req.z)
-        pose_local = tf_buffer.transform(ps, 'local_origin', TRANSFORM_TIMEOUT)
-        msg = PositionTarget(coordinate_frame=PositionTarget.FRAME_LOCAL_NED,
-                             type_mask=PositionTarget.IGNORE_VX + PositionTarget.IGNORE_VY + PositionTarget.IGNORE_VZ +
-                                       PositionTarget.IGNORE_AFX + PositionTarget.IGNORE_AFY + PositionTarget.IGNORE_AFZ +
-                                       PositionTarget.IGNORE_YAW,
-                             position=pose_local.pose.position,
-                             yaw_rate=req.yaw_rate)
-        return position_pub, msg
-
-    elif isinstance(req, srv.SetPositionGlobalRequest):
-        x, y = global_to_local(req.lat, req.lon)
-
-        ps.header.frame_id = req.frame_id or 'local_origin'
-        ps.pose.position = Point(0, 0, req.z)
-        ps.pose.orientation = orientation_from_euler(0, 0, req.yaw)
-        pose_local = tf_buffer.transform(ps, 'local_origin', TRANSFORM_TIMEOUT)
-        pose_local.pose.position.x = x
-        pose_local.pose.position.y = y
-
-        msg = PositionTarget(coordinate_frame=PositionTarget.FRAME_LOCAL_NED,
-                             type_mask=PositionTarget.IGNORE_VX + PositionTarget.IGNORE_VY + PositionTarget.IGNORE_VZ +
-                                       PositionTarget.IGNORE_AFX + PositionTarget.IGNORE_AFY + PositionTarget.IGNORE_AFZ +
-                                       PositionTarget.IGNORE_YAW_RATE,
-                             position=pose_local.pose.position,
-                             yaw=euler_from_orientation(pose_local.pose.orientation)[2] - math.pi / 2)
-        return position_pub, msg
-
-    elif isinstance(req, srv.SetPositionGlobalYawRateRequest):
-        x, y = global_to_local(req.lat, req.lon)
-
-        ps.header.frame_id = req.frame_id or 'local_origin'
-        ps.pose.position = Point(0, 0, req.z)
-        pose_local = tf_buffer.transform(ps, 'local_origin', TRANSFORM_TIMEOUT)
-        pose_local.pose.position.x = x
-        pose_local.pose.position.y = y
-
-        msg = PositionTarget(coordinate_frame=PositionTarget.FRAME_LOCAL_NED,
-                             type_mask=PositionTarget.IGNORE_VX + PositionTarget.IGNORE_VY + PositionTarget.IGNORE_VZ +
-                                       PositionTarget.IGNORE_AFX + PositionTarget.IGNORE_AFY + PositionTarget.IGNORE_AFZ +
-                                       PositionTarget.IGNORE_YAW,
-                             position=pose_local.pose.position,
-                             yaw_rate=req.yaw_rate)
-        return position_pub, msg
+        controls['x'] = local.point.x
+        controls['y'] = local.point.y
+        controls['z'] = local.point.z
 
     elif isinstance(req, srv.SetVelocityRequest):
-        vs.vector = Vector3(req.vx, req.vy, req.vz)
-        vs.header.frame_id = req.frame_id or 'local_origin'
-        ps.header.frame_id = req.frame_id or 'local_origin'
-        ps.pose.orientation = orientation_from_euler(0, 0, req.yaw)
-        pose_local = tf_buffer.transform(ps, 'local_origin', TRANSFORM_TIMEOUT)
-        vector_local = tf_buffer.transform(vs, 'local_origin', TRANSFORM_TIMEOUT)
-        msg = PositionTarget(coordinate_frame=PositionTarget.FRAME_LOCAL_NED,
-                             type_mask=PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +
-                                       PositionTarget.IGNORE_AFX + PositionTarget.IGNORE_AFY + PositionTarget.IGNORE_AFZ +
-                                       PositionTarget.IGNORE_YAW_RATE,
-                             velocity=vector_local.vector,
-                             yaw=euler_from_orientation(pose_local.pose.orientation)[2] - math.pi / 2)
-        return position_pub, msg
+        remove_keys(controls, ['x', 'y', 'z', 'roll', 'pitch', 'roll_rate', 'pitch_rate', 'thrust'])
 
-    elif isinstance(req, srv.SetVelocityYawRateRequest):
-        vs.vector = Vector3(req.vx, req.vy, req.vz)
         vs.header.frame_id = req.frame_id or 'local_origin'
-        vector_local = tf_buffer.transform(vs, 'local_origin', TRANSFORM_TIMEOUT)
-        msg = PositionTarget(coordinate_frame=PositionTarget.FRAME_LOCAL_NED,
-                             type_mask=PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +
-                                       PositionTarget.IGNORE_AFX + PositionTarget.IGNORE_AFY + PositionTarget.IGNORE_AFZ +
-                                       PositionTarget.IGNORE_YAW,
-                             velocity=vector_local.vector,
-                             yaw_rate=req.yaw_rate)
-        return position_pub, msg
+        vs.header.stamp = stamp
+        vs.vector = Vector3(req.vx, req.vy, req.vz)
+        local = tf_buffer.transform(pns, 'local_origin', TRANSFORM_TIMEOUT)
+
+        controls['vy'] = local.vector.x
+        controls['vz'] = local.vector.y
+        controls['vx'] = local.vector.z
 
     elif isinstance(req, srv.SetAttitudeRequest):
-        ps.header.frame_id = req.frame_id or 'local_origin'
-        ps.pose.orientation = orientation_from_euler(req.roll, req.pitch, req.yaw)
-        pose_local = tf_buffer.transform(ps, 'local_origin', TRANSFORM_TIMEOUT)
-        msg = AttitudeTarget(orientation=pose_local.pose.orientation,
-                             thrust=req.thrust,
-                             type_mask=AttitudeTarget.IGNORE_YAW_RATE + AttitudeTarget.IGNORE_PITCH_RATE +
-                                       AttitudeTarget.IGNORE_ROLL_RATE)
-        return attitude_pub, msg
-
-    elif isinstance(req, srv.SetAttitudeYawRateRequest):
-        msg = AttitudeTarget(orientation=orientation_from_euler(req.roll, req.pitch, 0),
-                             thrust=req.thrust,
-                             type_mask=AttitudeTarget.IGNORE_PITCH_RATE + AttitudeTarget.IGNORE_ROLL_RATE)
-        msg.body_rate.z = req.yaw_rate
-        return attitude_pub, msg
-
-    elif isinstance(req, srv.SetRatesYawRequest):
-        ps.header.frame_id = req.frame_id or 'local_origin'
-        ps.pose.orientation = orientation_from_euler(0, 0, req.yaw)
-        pose_local = tf_buffer.transform(ps, 'local_origin', TRANSFORM_TIMEOUT)
-        msg = AttitudeTarget(orientation=pose_local.pose.orientation,
-                             thrust=req.thrust,
-                             type_mask=AttitudeTarget.IGNORE_YAW_RATE,
-                             body_rate=Vector3(req.roll_rate, req.pitch_rate, 0))
-        return attitude_pub, msg
+        remove_keys(controls, ['x', 'y', 'z', 'vx', 'vy', 'vz', 'roll_rate', 'pitch_rate'])
+        controls['roll'] = req.roll
+        controls['pitch'] = req.pitch
+        controls['thrust'] = req.thrust
 
     elif isinstance(req, srv.SetRatesRequest):
-        msg = AttitudeTarget(thrust=req.thrust,
-                             type_mask=AttitudeTarget.IGNORE_ATTITUDE,
-                             body_rate=Vector3(req.roll_rate, req.pitch_rate, req.yaw_rate))
-        return attitude_pub, msg
+        remove_keys(controls, ['x', 'y', 'z', 'vx', 'vy', 'vz', 'roll', 'pitch'])
+        controls['roll_rate'] = req.roll_rate
+        controls['pitch_rate'] = req.pitch_rate
+        controls['thrust'] = req.thrust
+
+    elif isinstance(req, srv.SetYawRequest):
+        remove_keys(controls, ['yaw_rate'])
+
+        ps.header.frame_id = req.frame_id or 'local_origin'
+        ps.header.stamp = stamp
+        ps.pose.orientation = orientation_from_euler(0, 0, req.yaw)
+        local = tf_buffer.transform(ps, 'local_origin', TRANSFORM_TIMEOUT)
+        _, _, yaw = euler_from_orientation(local.pose.orientation)
+
+        controls['yaw'] = yaw
+
+    elif isinstance(req, srv.SetYawRateRequest):
+        remove_keys(controls, ['yaw'])
+        controls['yaw_rate'] = req.yaw_rate
+
+
+def get_publisher_and_message():
+    if 'x' in controls:
+        # Position control
+        msg = pt
+        msg.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
+        msg.type_mask = pt.IGNORE_VX + pt.IGNORE_VY + pt.IGNORE_VZ + pt.IGNORE_AFX + pt.IGNORE_AFY + pt.IGNORE_AFZ
+        msg.position.x = controls['x']
+        msg.position.y = controls['y']
+        msg.position.z = controls['z']
+        pub = position_pub
+
+    elif 'vx' in controls:
+        # Velocity control
+        msg = pt
+        msg.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
+        msg.type_mask = pt.IGNORE_PX + pt.IGNORE_PY + pt.IGNORE_PZ + pt.IGNORE_AFX + pt.IGNORE_AFY + pt.IGNORE_AFZ
+        msg.velocity.x = controls['x']
+        msg.velocity.y = controls['y']
+        msg.velocity.z = controls['z']
+        pub = position_pub
+
+    elif 'pitch' in controls:
+        # Attitude control
+        msg = at
+        msg.type_mask = at.IGNORE_PITCH_RATE + at.IGNORE_ROLL_RATE
+        msg.orientation = orientation_from_euler(controls['roll'], controls['pitch'], 0)
+        msg.thrust = controls['thrust']
+        pub = attitude_pub
+
+    else:
+        # Rates control
+        msg = at
+        msg.type_mask = at.IGNORE_ATTITUDE
+        msg.body_rate.x = controls['roll_rate']
+        msg.body_rate.y = controls['pitch_rate']
+        msg.thrust = controls['thrust']
+        pub = attitude_pub
+
+    if 'yaw_rate' in controls:
+        # yaw rate control
+        if isinstance(msg, PositionTarget):
+            msg.type_mask += pt.IGNORE_YAW
+            msg.yaw_rate = controls['yaw_rate']
+        else:
+            pitch, roll, _ = euler_from_orientation(msg.orientation)
+            msg.orientation = orientation_from_euler(pitch, roll, controls['yaw'])
+
+    else:
+        # yaw control
+        if isinstance(msg, PositionTarget):
+            msg.type_mask += pt.IGNORE_YAW_RATE
+            if 'yaw' in controls:
+                yaw = controls['yaw']
+            else:
+                # Maintain current yaw
+                _, _, yaw = euler_from_orientation(pose.pose.orientation)
+            msg.yaw = yaw
+        else:
+            msg.type_mask += at.IGNORE_YAW_RATE
+            pitch, roll, _ = euler_from_orientation(msg.orientation)
+            msg.orientation = orientation_from_euler(pitch, roll, controls['yaw'])
+
+    return pub, msg
 
 
 current_pub = None
 current_msg = None
 current_req = None
+current_yaw_req = None
 handle_lock = Lock()
 
 
 def handle(req):
-    global current_pub, current_msg, current_req
-    with handle_lock:
-        try:
-            stamp = rospy.get_rostime()
-            current_pub, current_msg = get_publisher_and_message(req, stamp)
-            rospy.loginfo('Topic: %s, message: %s', current_pub.name, current_msg)
+    global current_pub, current_msg, current_req, current_yaw_req
 
-            current_msg.header.stamp = stamp
-            current_pub.publish(current_msg)
+    if not state.connected:
+        return {'message': 'No connection to the FCU'}
 
+    try:
+        with handle_lock:
+                stamp = rospy.get_rostime()
+                yaw_control = isinstance(req, (srv.SetYawRequest, srv.SetYawRateRequest))
+
+                if yaw_control:
+                    current_yaw_req = req
+                else:
+                    current_req = req
+
+                apply_controls(req, stamp)
+                current_pub, current_msg = get_publisher_and_message()
+
+                rospy.loginfo('Topic: %s, message: %s', current_pub.name, current_msg)
+
+                current_msg.header.stamp = stamp
+                current_pub.publish(current_msg)
+
+        if not yaw_control:
             offboard_and_arm()
-            return {'success': True}
 
-        except Exception as e:
-            rospy.logerr(str(e))
-            return {'success': False, 'message': str(e)}
+        return {'success': True}
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        rospy.logerr(str(e))
+        return {'success': False, 'message': str(e)}
 
 
 def release(req):
@@ -290,15 +311,12 @@ def release(req):
 
 
 rospy.Service('set_position', srv.SetPosition, handle)
-rospy.Service('set_position/yaw_rate', srv.SetPositionYawRate, handle)
 rospy.Service('set_position_global', srv.SetPositionGlobal, handle)
-rospy.Service('set_position_global/yaw_rate', srv.SetPositionGlobalYawRate, handle)
 rospy.Service('set_velocity', srv.SetVelocity, handle)
-rospy.Service('set_velocity/yaw_rate', srv.SetVelocityYawRate, handle)
 rospy.Service('set_attitude', srv.SetAttitude, handle)
-rospy.Service('set_attitude/yaw_rate', srv.SetAttitudeYawRate, handle)
 rospy.Service('set_rates', srv.SetRates, handle)
-rospy.Service('set_rates/yaw', srv.SetRatesYaw, handle)
+rospy.Service('set_yaw', srv.SetYaw, handle)
+rospy.Service('set_yaw_rate', srv.SetYawRate, handle)
 rospy.Service('release', Trigger, release)
 
 
@@ -379,8 +397,19 @@ def start_loop():
                 try:
                     stamp = rospy.get_rostime()
 
-                    if getattr(current_req, 'update_frame', False):
-                        current_pub, current_msg = get_publisher_and_message(current_req, stamp)
+                    updated = False
+
+                    if getattr(current_req, 'frame_locked', False):
+                        apply_controls(current_req, stamp)
+                        updated = True
+
+                    if getattr(current_yaw_req, 'frame_locked', False):
+                        apply_controls(current_yaw_req, stamp)
+                        updated = True
+
+                    if updated:
+                        rospy.loginfo('Controls: %s', controls)
+                        current_pub, current_msg = get_publisher_and_message()
 
                     current_msg.header.stamp = stamp
                     current_pub.publish(current_msg)
