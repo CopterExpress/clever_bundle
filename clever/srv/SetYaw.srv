@@ -1,0 +1,6 @@
+string frame_id
+bool frame_locked
+float32 yaw
+---
+bool success
+string message
