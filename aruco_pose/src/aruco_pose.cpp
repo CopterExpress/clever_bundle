@@ -220,6 +220,45 @@ void ArucoPose::detect(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs:
         int valid = _estimatePoseBoard(markerCorners, markerIds, board, cameraMatrix, distCoeffs,
                                        rvec, tvec, false, objPoints);
 
+        if(img_pub.getNumSubscribers() > 0)
+        {
+            // Publish debug image
+            for (int i; i < markerIds.size(); i++)
+            {
+                // Detected markers from 'marker_ids' launch file param
+                std::vector<int> detectedBoardMarkerIds;
+                std::vector<std::vector<cv::Point2f>> detectedBoardMarkerCorners;
+
+                // Markers that was detected but not in the marker list in the launch file
+                std::vector<int> detectedNotBoardMarkerIds;
+                std::vector<std::vector<cv::Point2f>> detectedNotBoardMarkerCorners;
+
+                // If id in board->ids
+                if (std::find(board->ids.begin(), board->ids.end(), id) != board->ids.end())
+                {
+                    detectedBoardMarkerIds.push(markerIds[i]);
+                    detectedBoardMarkerCorners.push(markerCorners[i]);
+                }
+                else
+                {
+                    detectedNotBoardMarkerIds.push(markerIds[i]);
+                    detectedNotBoardMarkerCorners.push(markerCorners[i]);
+                }
+            }
+
+            if (detectedBoardMarkerIds.size() > 0) {
+                cv::aruco::drawDetectedMarkers(image, detectedBoardMarkerCorners, detectedBoardMarkerIds);
+                cv::aruco::drawAxis(image, cameraMatrix, distCoeffs, rvec, tvec, 0.3);
+            }
+
+            if (detectedNotBoardMarkerIds.size() > 0) {
+                cv::aruco::drawDetectedMarkers(image,
+                                               detectedNotBoardMarkerCorners,
+                                               detectedNotBoardMarkerIds,
+                                               cv::Scalar(255, 0, 0));
+            }
+        }
+
         if (valid) {
             // Send map transform
             tf::StampedTransform transform(aruco2tf(rvec, tvec), msg->header.stamp, cinfo->header.frame_id, frame_id_);
@@ -243,13 +282,6 @@ void ArucoPose::detect(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs:
             ref_transform.setOrigin(ref_vector3);
             ref_transform.setRotation(q);
             br.sendTransform(ref_transform);
-
-            if(img_pub.getNumSubscribers() > 0)
-            {
-                // Publish debug image
-                cv::aruco::drawDetectedMarkers(image, markerCorners, markerIds);
-                cv::aruco::drawAxis(image, cameraMatrix, distCoeffs, rvec, tvec, 0.3);
-            }
         }
     }
 
